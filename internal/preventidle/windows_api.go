@@ -16,9 +16,10 @@ var (
 	modkernel32                 = syscall.NewLazyDLL("kernel32.dll")
 	procSetThreadExecutionState = modkernel32.NewProc("SetThreadExecutionState")
 	procGetTickCount            = modkernel32.NewProc("GetTickCount")
-	moduser32                   = syscall.NewLazyDLL("user32.dll")
-	procGetLastInputInfo        = moduser32.NewProc("GetLastInputInfo")
-	procSendInput               = moduser32.NewProc("SendInput")
+
+	user32               = syscall.NewLazyDLL("user32.dll")
+	procGetLastInputInfo = user32.NewProc("GetLastInputInfo")
+	procSendInput        = user32.NewProc("SendInput")
 )
 
 const (
@@ -64,12 +65,14 @@ func CallSendInput(mode string) error {
 	switch mode {
 	case "key":
 		// key down
-		ki := input{
+		ki := CallKeyboardInput{
 			Type: INPUT_KEYBOARD,
 			Ki: KeyboardInput{
-				wVk:         VK_SPACE,
-				dwFlags:     0,
-				dwExtraInfo: 0,
+				WVk:         VK_SPACE,
+				WScan:       0,
+				DwFlags:     0,
+				Time:        0,
+				DwExtraInfo: 0,
 			},
 		}
 		n, _, err := procSendInput.Call(1, uintptr(unsafe.Pointer(&ki)), unsafe.Sizeof(ki))
@@ -77,7 +80,7 @@ func CallSendInput(mode string) error {
 			return fmt.Errorf("SendInput key down failed: %v", err)
 		}
 		// key up
-		ki.Ki.dwFlags = KEYEVENTF_KEYUP
+		ki.Ki.DwFlags = KEYEVENTF_KEYUP
 		n, _, err = procSendInput.Call(1, uintptr(unsafe.Pointer(&ki)), unsafe.Sizeof(ki))
 		if n == 0 {
 			return fmt.Errorf("SendInput key up failed: %v", err)
@@ -88,10 +91,10 @@ func CallSendInput(mode string) error {
 	case "mouse":
 		// get current cursor position and move by +1 X
 		// here we simply send relative move
-		mi := input{
+		mi := CallMouseInput{
 			Type: INPUT_MOUSE,
 			Mi: MouseInput{
-				dx:          1,
+				dx:          10,
 				dy:          0,
 				dwFlags:     0x0001, // MOUSEEVENTF_MOVE
 				dwExtraInfo: 0,
@@ -101,6 +104,21 @@ func CallSendInput(mode string) error {
 		if n == 0 {
 			return fmt.Errorf("SendInput mouse move failed: %v", err)
 		}
+
+		mi = CallMouseInput{
+			Type: INPUT_MOUSE,
+			Mi: MouseInput{
+				dx:          10,
+				dy:          0,
+				dwFlags:     0x0001, // MOUSEEVENTF_MOVE
+				dwExtraInfo: 0,
+			},
+		}
+		n, _, err = procSendInput.Call(1, uintptr(unsafe.Pointer(&mi)), unsafe.Sizeof(mi))
+		if n == 0 {
+			return fmt.Errorf("SendInput mouse move failed: %v", err)
+		}
+
 		logger.LogInfo("Windows: simulated mouse move")
 		return nil
 

@@ -16,11 +16,11 @@ type LastInputInfo struct {
 }
 
 type KeyboardInput struct {
-	wVk         uint16
-	wScan       uint16
-	dwFlags     uint32
-	time        uint32
-	dwExtraInfo uintptr
+	WVk         uint16
+	WScan       uint16
+	DwFlags     uint32
+	Time        uint32
+	DwExtraInfo uintptr
 }
 
 type MouseInput struct {
@@ -32,9 +32,15 @@ type MouseInput struct {
 	dwExtraInfo uintptr
 }
 
-type input struct {
+type CallKeyboardInput struct {
 	Type uint32
-	_    [4]byte // padding
-	Ki   KeyboardInput
-	Mi   MouseInput
+	_    [4]byte       // padding
+	Ki   KeyboardInput // KEYBDINPUT
+	_    [8]byte       // padding to fill union (32 - sizeof(KEYBDINPUT))
+}
+
+type CallMouseInput struct {
+	Type uint32
+	_    [4]byte    // padding
+	Mi   MouseInput // KEYBDINPUT
 }
