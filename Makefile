@@ -1,24 +1,23 @@
 # Makefile – Build, test and package for multiple platforms
-
 BIN_DIR := bin
-
+CONFIG := config.yaml
 
 .PHONY: all build linux windows macos ui daemon test clean
 
 all: test build
 
 # Build for host OS
-build: ui daemon config
+build: ui daemon
 
 # Build UI
-ui:config
+ui:
 	@echo "→ Building UI (host OS)..."
 	@mkdir -p $(BIN_DIR)
 	@go build -o $(BIN_DIR)/app-ui ./cmd/main
 	@echo "   → $(BIN_DIR)/app-ui"
 
 # Build Daemon
-daemon: config
+daemon:
 	@echo "→ Building Daemon (host OS)..."
 	@mkdir -p $(BIN_DIR)
 	@go build -o $(BIN_DIR)/app-daemon ./cmd/daemon
@@ -30,7 +29,7 @@ daemon: config
 
 # build-debug: compile the daemon with debug information
 #   -gcflags "all=-N -l" disables optimizations and inlining for easier single-stepping
-debug-build: config
+debug-build:
 	@echo "→ Building daemon with debug info…"
 	@mkdir -p $(BIN_DIR)
 	@go build -gcflags "all=-N -l" \
@@ -57,61 +56,11 @@ test:
 	@go test ./...
 	@echo "   ✔ All tests passed."
 
-# Create config
-config:
-	@echo "→ Generating default config.yaml..."
-	@mkdir -p $(BIN_DIR)
-	@printf '%s\n' \
-	  "version:" \
-	  "  name: GoIdleGuard" \
-	  "  version: 0.1.0" \
-	  "" \
-	  "scheduler:" \
-	  "  interval: \"5m\"" \
-	  "" \
-	  "idlePrevention:" \
-	  "  enabled: true" \
-	  "  interval: \"10m\"      # 模擬操作間隔時間" \
-	  "  mode: \"key\"       # 模擬模式，可選：key, mouse, mixed" \
-	  "" \
-	  "retryPolicy:" \
-	  "  retryInterval: \"1s\"" \
-	  "  maxRetries: 3" \
-	  "" \
-	  "logging:" \
-	  "  level: \"debug\"" \
-	  "  output: \"console\"   # 或指定檔案路徑" \
-	  "" \
-	  "workSchedule:" \
-	  "  monday:" \
-	  "    - start: \"08:00\"" \
-	  "      end:   \"12:00\"" \
-	  "    - start: \"13:00\"" \
-	  "      end:   \"17:00\"" \
-	  "  tuesday:" \
-	  "    - start: \"08:00\"" \
-	  "      end:   \"12:00\"" \
-	  "    - start: \"13:00\"" \
-	  "      end:   \"17:00\"" \
-	  "  wednesday:" \
-	  "    - start: \"08:00\"" \
-	  "      end:   \"12:00\"" \
-	  "    - start: \"13:00\"" \
-	  "      end:   \"17:00\"" \
-	  "  thursday:" \
-	  "    - start: \"08:00\"" \
-	  "      end:   \"12:00\"" \
-	  "    - start: \"13:00\"" \
-	  "      end:   \"17:00\"" \
-	  "  friday:" \
-	  "    - start: \"08:00\"" \
-	  "      end:   \"12:00\"" \
-	  "    - start: \"13:00\"" \
-	  "      end:   \"17:00\"" \
-	  "  saturday: []" \
-	  "  sunday:   []" \
-	> $(BIN_DIR)/config.yaml
-	@echo "   → $(BIN_DIR)/config.yaml created."
+config-windows:
+	@echo "→ Installing $(CONFIG) to $(BIN_DIR)..."
+	@if not exist "$(BIN_DIR)" mkdir "$(BIN_DIR)"
+	@cmd /C "copy /Y "$(CONFIG)" "$(BIN_DIR)"
+	@echo "   → $(BIN_DIR)\\config.yaml created."
 
 # --------------------
 # Cross‑platform targets
@@ -133,18 +82,18 @@ linux-daemon:
 	@echo "   → $(BIN_DIR)/app-daemon-linux"
 
 # Windows amd64
-windows: windows-ui windows-daemon config
+windows: windows-ui windows-daemon config-windows
 
-windows-ui:
-	@echo "→ Building UI for Windows/amd64..."
-	@mkdir -p $(BIN_DIR)
-	@GOOS=windows GOARCH=amd64 go build -o $(BIN_DIR)/app-ui.exe ./cmd/main
+windows-ui: config-windows
+	@echo "→ Building UI for Windows/amd64…"
+	@if not exist "$(BIN_DIR)" mkdir "$(BIN_DIR)"
+	@cmd /C "set GOOS=windows&& set GOARCH=amd64&& go build -o $(BIN_DIR)/app-ui.exe ./cmd/main"
 	@echo "   → $(BIN_DIR)/app-ui.exe"
 
-windows-daemon:
+windows-daemon: config-windows
 	@echo "→ Building Daemon for Windows/amd64..."
-	@mkdir -p $(BIN_DIR)
-	@GOOS=windows GOARCH=amd64 go build -o $(BIN_DIR)/app-daemon.exe ./cmd/daemon
+	@if not exist "$(BIN_DIR)" mkdir -p "$(BIN_DIR)"
+	@cmd /C "set GOOS=windows&& set GOARCH=amd64&& go build -o $(BIN_DIR)/app-daemon.exe ./cmd/daemon
 	@echo "   → $(BIN_DIR)/app-daemon.exe"
 
 # macOS amd64
@@ -165,7 +114,6 @@ macos-daemon:
 # --------------------
 # Clean
 # --------------------
-
 clean:
 	@echo "→ Cleaning build artifacts..."
 	@rm -rf $(BIN_DIR)
