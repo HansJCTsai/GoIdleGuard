@@ -62,6 +62,14 @@ config-windows:
 	@cmd /C "copy /Y "$(CONFIG)" "$(BIN_DIR)"
 	@echo "   → $(BIN_DIR)\\config.yaml created."
 
+config-macos:
+	@echo "→ Installing $(CONFIG) to $(BIN_DIR)..."
+	@if [ ! -d "$(BIN_DIR)" ]; then \
+		echo "   → $(BIN_DIR) not found, creating..."; \
+		mkdir -p "$(BIN_DIR)"; \
+	fi
+	@cp "$(CONFIG)" "$(BIN_DIR)/config.yaml"
+	@echo "   → $(BIN_DIR)/config.yaml created."
 # --------------------
 # Cross‑platform targets
 # --------------------
@@ -87,7 +95,7 @@ windows: windows-ui windows-daemon config-windows
 windows-ui: config-windows
 	@echo "→ Building UI for Windows/amd64…"
 	@if not exist "$(BIN_DIR)" mkdir "$(BIN_DIR)"
-	@cmd /C "set GOOS=windows&& set GOARCH=amd64&& go build -o $(BIN_DIR)/app-ui.exe ./cmd/main"
+	@cmd /C "set GOOS=windows&& set GOARCH=amd64&& go build -o $(BIN_DIR)/app-ui.exe ./cmd/gui"
 	@echo "   → $(BIN_DIR)/app-ui.exe"
 
 windows-daemon: config-windows
@@ -99,13 +107,13 @@ windows-daemon: config-windows
 # macOS amd64
 macos: macos-ui macos-daemon config
 
-macos-ui:
+macos-ui: config-macos
 	@echo "→ Building UI for macOS/amd64..."
 	@mkdir -p $(BIN_DIR)
-	@GOOS=darwin GOARCH=amd64 go build -o $(BIN_DIR)/app-ui-darwin ./cmd/main
+	@GOOS=darwin GOARCH=amd64 go build -o $(BIN_DIR)/app-ui-darwin ./cmd/gui
 	@echo "   → $(BIN_DIR)/app-ui-darwin"
 
-macos-daemon:
+macos-daemon: config-macos
 	@echo "→ Building Daemon for macOS/amd64..."
 	@mkdir -p $(BIN_DIR)
 	@GOOS=darwin GOARCH=amd64 go build -o $(BIN_DIR)/app-daemon-darwin ./cmd/daemon

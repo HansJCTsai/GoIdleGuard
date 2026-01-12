@@ -23,6 +23,7 @@ func NewController(cfg *config.APPConfig) *Controller {
 		healthStop: make(chan struct{}),
 	}
 }
+
 func (c *Controller) StartDaemon() {
 	logger.LogInfo("StartDaemon: will wait for idle >=", c.cfg.IdlePrevention.Interval)
 	task := func() {
