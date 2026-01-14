@@ -2,51 +2,56 @@ package main
 
 import (
 	_ "embed"
+	"io"
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"syscall"
-	"unsafe"
 
 	"github.com/HanksJCTsai/goidleguard/internal/config"
 	"github.com/HanksJCTsai/goidleguard/pkg/logger"
 	"github.com/getlantern/systray"
+	"gopkg.in/natefinch/lumberjack.v2"
 )
 
 //go:embed icon.ico
 var iconData []byte
 
 func main() {
-
+	appTitle := "GoIdleGuard"
+	appTooltip := "GoIdleGuard is running"
+	if runtime.GOOS == "darwin" {
+		appTitle = ""
+		appTooltip = ""
+	}
 	// 1. 確保 Log 檔案跟執行檔在同一層目錄
 	ex, _ := os.Executable()
 	logPath := filepath.Join(filepath.Dir(ex), "app.log")
 
 	// 2. 開啟檔案
-	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
-	if err != nil {
-		panic(err) // 如果連檔案都開不了，直接崩潰讓你知道
+	logFile := &lumberjack.Logger{
+		Filename:   logPath, // 檔案路徑
+		MaxSize:    10,      // 每個 Log 檔案最大 10 MB (超過就切割)
+		MaxBackups: 5,       // 最多保留 5 個舊檔案 (超過就刪最舊的)
+		MaxAge:     30,      // 舊檔案最多保留 30 天
+		Compress:   true,    // 是否壓縮舊檔案 (變成 .gz 以節省空間)
 	}
+	// 記得在程式結束時關閉它
 	defer logFile.Close()
-
-	// --- 除錯檢查點 (Debug Checkpoint) ---
-	// 先繞過 logger 套件，直接用 Go 原生功能寫入一行
-	// 如果這行沒出現，代表是檔案權限或路徑問題
-	logFile.WriteString("=== SYSTEM STARTUP CHECK: File Write OK ===\n")
-
 	// 3. 設定 Logger 輸出
-	// 注意：這裡我們設定之後，千萬不要再呼叫 InitLogger()，否則會被重置！
-	logger.SetOutput(logFile)
+	logger.SetOutput(io.MultiWriter(os.Stdout, logFile))
 
-	// 4. 使用 Logger 寫入測試
-	logger.LogInfo("Logger configured successfully. Path: ", logPath)
+	logger.LogInfo("=== SYSTEM STARTUP CHECK: File Write OK ===\n")
+	logger.LogInfo("=== Log System: Rotation Enabled (10MB limit). Path: ", logPath, " ===")
 
-	cfg, err := config.LoadConfig("config.yaml")
+	configPath := filepath.Join(filepath.Dir(ex), "config.yaml")
+	cfg, err := config.LoadConfig(configPath)
 	if err != nil {
 		logger.LogError("Failed to load config:", err)
 		os.Exit(1)
 	}
-	logger.LogInfo("Config loaded successfully")
+	logger.LogInfo("Config loaded successfully. Path: ", configPath)
 
 	// 建立並啟動 DaemonController
 	dc := NewController(cfg)
@@ -54,8 +59,8 @@ func main() {
 		// Set icon and tooltip / 設定圖示與提示文字
 		// Note: You need to implement getIconData() to return []byte of your icon
 		systray.SetIcon(iconData)
-		systray.SetTitle("GoIdleGuard")
-		systray.SetTooltip("GoIdleGuard is running")
+		systray.SetTitle(appTitle)
+		systray.SetTooltip(appTooltip)
 
 		// 1. 開啟一個獨立的 PowerShell 視窗來監控日誌
 		mShowLogs := systray.AddMenuItem("Show Logs (Live)", "Open log viewer")
@@ -78,7 +83,7 @@ func main() {
 					openLogViewer(logPath)
 				case <-mSettings.ClickedCh:
 					// User clicked Settings / 使用者點擊了設定
-					openFile("config.yaml")
+					openFile(configPath)
 				case <-mAbout.ClickedCh:
 					// User clicked About / 使用者點擊了關於
 					showWindowsAlert("GoIdleGuard v1.0", "Created by Hanks\n\nRunning in background to keep system awake.")
@@ -111,26 +116,4 @@ func main() {
 	// Start system tray / 啟動系統匣
 	// This will block main thread / 這會卡住主執行緒直到 systray.Quit() 被呼叫
 	systray.Run(onReady, onExit)
-}
-
-// showWindowsAlert calls the native Windows MessageBoxW API
-// 呼叫 Windows 底層 API 顯示彈出視窗 (不需要額外 GUI 套件)
-func showWindowsAlert(title, message string) {
-	// 載入 user32.dll
-	user32 := syscall.NewLazyDLL("user32.dll")
-	procMessageBox := user32.NewProc("MessageBoxW")
-
-	// 轉換字串為 UTF-16 指標 (Windows API 要求)
-	pTitle, _ := syscall.UTF16PtrFromString(title)
-	pMessage, _ := syscall.UTF16PtrFromString(message)
-
-	// 呼叫 MessageBox (0 = NULL, MB_OK = 0, MB_ICONINFORMATION = 0x40)
-	// uintptr(0) 代表沒有父視窗
-	// uintptr(0x40) 代表顯示 "i" (Information) 圖示
-	procMessageBox.Call(
-		uintptr(0),
-		uintptr(unsafe.Pointer(pMessage)),
-		uintptr(unsafe.Pointer(pTitle)),
-		uintptr(0x40),
-	)
 }

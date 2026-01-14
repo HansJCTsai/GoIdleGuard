@@ -105,20 +105,60 @@ windows-daemon: clean config-windows
 	@echo "  → $(BIN_DIR)/app-daemon.exe"
 
 # macOS amd64
-macos: macos-ui macos-daemon config
+macos: clean macos-ui macos-daemon config
 
-macos-ui: config-macos
+macos-ui: clean config-macos
 	@echo "→ Building UI for macOS/amd64..."
 	@mkdir -p $(BIN_DIR)
 	@GOOS=darwin GOARCH=amd64 go build -o $(BIN_DIR)/app-ui-darwin ./cmd/gui
 	@echo "   → $(BIN_DIR)/app-ui-darwin"
 
-macos-daemon: config-macos
+macos-daemon: clean config-macos
 	@echo "→ Building Daemon for macOS/amd64..."
 	@mkdir -p $(BIN_DIR)
 	@GOOS=darwin GOARCH=amd64 go build -o $(BIN_DIR)/app-daemon-darwin ./cmd/daemon
 	@echo "   → $(BIN_DIR)/app-daemon-darwin"
 
+# 定義 MacOS App 名稱
+APP_NAME=GoIdleGuard
+APP_BUNDLE=bin/$(APP_NAME).app
+CONTENTS=$(APP_BUNDLE)/Contents
+MACOS_DIR=$(CONTENTS)/MacOS
+RESOURCES=$(CONTENTS)/Resources
+# --- macOS App Packaging ---
+macos-app: macos-daemon
+	@echo "Packaging $(APP_NAME).app for macOS..."
+	
+	# 1. 建立目錄結構
+	@mkdir -p "$(MACOS_DIR)"
+	@mkdir -p "$(RESOURCES)"
+	
+	# 2. 複製執行檔與設定檔
+	@cp "bin/app-daemon-darwin" "$(MACOS_DIR)/$(APP_NAME)"
+	@cp "config.yaml" "$(MACOS_DIR)/"
+	
+	# 3. 建立 Info.plist
+	@echo '<?xml version="1.0" encoding="UTF-8"?>' > "$(CONTENTS)/Info.plist"
+	@echo '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">' >> "$(CONTENTS)/Info.plist"
+	@echo '<plist version="1.0">' >> "$(CONTENTS)/Info.plist"
+	@echo '<dict>' >> "$(CONTENTS)/Info.plist"
+	@echo '    <key>CFBundleExecutable</key>' >> "$(CONTENTS)/Info.plist"
+	@echo '    <string>$(APP_NAME)</string>' >> "$(CONTENTS)/Info.plist"
+	@echo '    <key>CFBundleIconFile</key>' >> "$(CONTENTS)/Info.plist"
+	@echo '    <string>icon.icns</string>' >> "$(CONTENTS)/Info.plist"
+	@echo '    <key>CFBundleIdentifier</key>' >> "$(CONTENTS)/Info.plist"
+	@echo '    <string>com.hanks.goidleguard</string>' >> "$(CONTENTS)/Info.plist"
+	@echo '    <key>LSUIElement</key>' >> "$(CONTENTS)/Info.plist"
+	@echo '    <true/>' >> "$(CONTENTS)/Info.plist"
+	@echo '</dict>' >> "$(CONTENTS)/Info.plist"
+	@echo '</plist>' >> "$(CONTENTS)/Info.plist"
+	
+	# 4. (選用) 設定權限
+	@chmod +x "$(MACOS_DIR)/$(APP_NAME)"
+	
+	@echo "App Bundle created at: $(APP_BUNDLE)"
+	@echo "You can now double-click $(APP_NAME).app to run silently!"
+	
 # --------------------
 # Clean
 # --------------------

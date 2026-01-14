@@ -41,11 +41,24 @@ func openFile(filename string) {
 	_ = cmd.Start()
 }
 
-// 彈出提示視窗
-func showAlert(title, message string) {
+// showWindowsAlert calls the native Windows MessageBoxW API
+// 呼叫 Windows 底層 API 顯示彈出視窗 (不需要額外 GUI 套件)
+func showWindowsAlert(title, message string) {
+	// 載入 user32.dll
 	user32 := syscall.NewLazyDLL("user32.dll")
 	procMessageBox := user32.NewProc("MessageBoxW")
+
+	// 轉換字串為 UTF-16 指標 (Windows API 要求)
 	pTitle, _ := syscall.UTF16PtrFromString(title)
 	pMessage, _ := syscall.UTF16PtrFromString(message)
-	procMessageBox.Call(0, uintptr(unsafe.Pointer(pMessage)), uintptr(unsafe.Pointer(pTitle)), 0x40)
+
+	// 呼叫 MessageBox (0 = NULL, MB_OK = 0, MB_ICONINFORMATION = 0x40)
+	// uintptr(0) 代表沒有父視窗
+	// uintptr(0x40) 代表顯示 "i" (Information) 圖示
+	procMessageBox.Call(
+		uintptr(0),
+		uintptr(unsafe.Pointer(pMessage)),
+		uintptr(unsafe.Pointer(pTitle)),
+		uintptr(0x40),
+	)
 }
