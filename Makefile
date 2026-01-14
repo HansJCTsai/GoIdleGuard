@@ -58,9 +58,9 @@ test:
 
 config-windows:
 	@echo "→ Installing $(CONFIG) to $(BIN_DIR)..."
-	@mkdir -p "$(BIN_DIR)"
-	@cp -f "$(CONFIG)" "$(BIN_DIR)/"
-	@echo "  → $(BIN_DIR)/config.yaml created."
+	@if not exist "$(BIN_DIR)" mkdir "$(BIN_DIR)"
+	@copy /Y "$(CONFIG)" "$(BIN_DIR)\"
+	@echo "   → $(BIN_DIR)/config.yaml created."
 
 config-macos:
 	@echo "→ Installing $(CONFIG) to $(BIN_DIR)..."
@@ -90,18 +90,18 @@ linux-daemon:
 	@echo "   → $(BIN_DIR)/app-daemon-linux"
 
 # Windows amd64
-windows: windows-ui windows-daemon config-windows
+windows: clean windows-ui windows-daemon config-windows
 
-windows-ui: config-windows
+windows-ui: clean config-windows
 	@echo "→ Building UI for Windows/amd64…"
-	@mkdir -p "$(BIN_DIR)"
-	@GOOS=windows&& set GOARCH=amd64&& go build -o "$(BIN_DIR)/app-ui.exe" ./cmd/gui
+	@if not exist "$(BIN_DIR)" mkdir "$(BIN_DIR)"
+	@set GOOS=windows&& set GOARCH=amd64&& go build -o "$(BIN_DIR)/app-ui.exe" ./cmd/gui
 	@echo "   → $(BIN_DIR)/app-ui.exe"
 
-windows-daemon: config-windows
+windows-daemon: clean config-windows
 	@echo "→ Building Daemon for Windows/amd64..."
-	@mkdir -p "$(BIN_DIR)"
-	@GOOS=windows GOARCH=amd64 go build -o "$(BIN_DIR)/app-daemon.exe" ./cmd/daemon
+	@if not exist "$(BIN_DIR)" mkdir "$(BIN_DIR)"
+	@set GOOS=windows&& set GOARCH=amd64&& go build -ldflags -H=windowsgui -o "$(BIN_DIR)/app-daemon.exe" ./cmd/daemon
 	@echo "  → $(BIN_DIR)/app-daemon.exe"
 
 # macOS amd64
@@ -122,7 +122,13 @@ macos-daemon: config-macos
 # --------------------
 # Clean
 # --------------------
+ifeq ($(OS),Windows_NT)
+    RM = if exist bin rd /s /q $(BIN_DIR)
+else
+    RM = rm -rf $(BIN_DIR)
+endif
+
 clean:
 	@echo "→ Cleaning build artifacts..."
-	@rm -rf $(BIN_DIR)
+	@$(RM)
 	@echo "   ✔ Removed $(BIN_DIR)/"
