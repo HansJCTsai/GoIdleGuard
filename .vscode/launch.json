@@ -1,0 +1,35 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            // 第一個設定：除錯 Daemon (背景服務)
+            "name": "Debug Daemon (GoIdleGuard)",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            // 指向 daemon 的 main.go 所在目錄
+            "program": "${workspaceFolder}/cmd/daemon",
+            "args": [],
+            "env": {
+                // 如果你在 macOS 上除錯，建議把這兩行 GOOS/GOARCH 拿掉，讓它自動偵測
+                // "GOOS": "windows",
+                // "GOARCH": "amd64"
+            },
+            "console": "integratedTerminal"
+        },
+        {
+            // [新增] 第二個設定：除錯 GUI (設定介面)
+            "name": "Debug GUI (Settings)",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            // 指向 gui 的 main.go 所在目錄
+            "program": "${workspaceFolder}/cmd/gui",
+            "args": [],
+            "env": {
+                // 同樣，在 macOS 本機除錯時不需要強制設為 windows
+            },
+            "console": "integratedTerminal"
+        }
+    ]
+}

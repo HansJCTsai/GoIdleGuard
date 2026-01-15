@@ -101,7 +101,8 @@ windows-ui: clean config-windows
 windows-daemon: clean config-windows
 	@echo "→ Building Daemon for Windows/amd64..."
 	@if not exist "$(BIN_DIR)" mkdir "$(BIN_DIR)"
-	@set GOOS=windows&& set GOARCH=amd64&& go build -ldflags -H=windowsgui -o "$(BIN_DIR)/app-daemon.exe" ./cmd/daemon
+	@set GOOS=windows&& set GOARCH=amd64&& go build -ldflags "-H=windowsgui" -o "$(BIN_DIR)/app-daemon-headless.exe" ./cmd/daemon
+	@set GOOS=windows&& set GOARCH=amd64&& go build -o "$(BIN_DIR)/app-daemon.exe" ./cmd/daemon
 	@echo "  → $(BIN_DIR)/app-daemon.exe"
 
 # macOS amd64

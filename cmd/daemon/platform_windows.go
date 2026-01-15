@@ -11,9 +11,6 @@ import (
 	"github.com/HanksJCTsai/goidleguard/pkg/logger"
 )
 
-// No need for console control constants anymore
-// 不再需要控制 Console 的常數，因為我們改用 GUI 模式 + 外部視窗
-
 // openLogViewer spawns a separate PowerShell window to tail the log
 // openLogViewer 產生一個獨立的 PowerShell 視窗來跟隨日誌
 func openLogViewer(filename string) {

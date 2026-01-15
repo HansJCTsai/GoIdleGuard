@@ -2,6 +2,7 @@ package main
 
 import (
 	_ "embed"
+	"fmt"
 	"io"
 	"os"
 	"os/signal"
@@ -18,34 +19,45 @@ import (
 //go:embed icon.ico
 var iconData []byte
 
+const (
+	AppName      = "GoIdleGuard"
+	AppTooltip   = "GoIdleGuard is running"
+	LogFileName  = "app.log"
+	ConfFileName = "config.yaml"
+)
+
 func main() {
-	appTitle := "GoIdleGuard"
-	appTooltip := "GoIdleGuard is running"
-	if runtime.GOOS == "darwin" {
-		appTitle = ""
-		appTooltip = ""
-	}
 	// 1. 確保 Log 檔案跟執行檔在同一層目錄
-	ex, _ := os.Executable()
-	logPath := filepath.Join(filepath.Dir(ex), "app.log")
+	appRoot := resolveAppRoot()
+
+	// 2. 設定路徑 (統一使用 appRoot)
+	logPath := filepath.Join(appRoot, LogFileName)
+	configPath := filepath.Join(appRoot, ConfFileName)
+
+	// [關鍵修正] 確保 Log 目錄存在！
+	// lumberjack 不會自己建立目錄，如果目錄不存在，寫入會失敗
+	if err := os.MkdirAll(filepath.Dir(logPath), 0755); err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to create log dir: %v\n", err)
+	}
 
 	// 2. 開啟檔案
 	logFile := &lumberjack.Logger{
 		Filename:   logPath, // 檔案路徑
-		MaxSize:    10,      // 每個 Log 檔案最大 10 MB (超過就切割)
+		MaxSize:    1,       // 每個 Log 檔案最大 1 MB (超過就切割)
 		MaxBackups: 5,       // 最多保留 5 個舊檔案 (超過就刪最舊的)
 		MaxAge:     30,      // 舊檔案最多保留 30 天
 		Compress:   true,    // 是否壓縮舊檔案 (變成 .gz 以節省空間)
 	}
-	// 記得在程式結束時關閉它
 	defer logFile.Close()
-	// 3. 設定 Logger 輸出
-	logger.SetOutput(io.MultiWriter(os.Stdout, logFile))
+	// 讓 logFile 優先被寫入，這樣就算 os.Stdout 在 GUI 模式下報錯也不會影響檔案紀錄
+	logger.SetOutput(io.MultiWriter(logFile, os.Stdout))
 
-	logger.LogInfo("=== SYSTEM STARTUP CHECK: File Write OK ===\n")
+	logger.LogInfo("=== App Started ===")
+	logger.LogInfo("App Root detected: ", appRoot)
+	logger.LogInfo("Log Path: ", logPath)
+	logger.LogInfo("Config Path: ", configPath)
 	logger.LogInfo("=== Log System: Rotation Enabled (10MB limit). Path: ", logPath, " ===")
 
-	configPath := filepath.Join(filepath.Dir(ex), "config.yaml")
 	cfg, err := config.LoadConfig(configPath)
 	if err != nil {
 		logger.LogError("Failed to load config:", err)
@@ -56,54 +68,7 @@ func main() {
 	// 建立並啟動 DaemonController
 	dc := NewController(cfg)
 	onReady := func() {
-		// Set icon and tooltip / 設定圖示與提示文字
-		// Note: You need to implement getIconData() to return []byte of your icon
-		systray.SetIcon(iconData)
-		systray.SetTitle(appTitle)
-		systray.SetTooltip(appTooltip)
-
-		// 1. 開啟一個獨立的 PowerShell 視窗來監控日誌
-		mShowLogs := systray.AddMenuItem("Show Logs (Live)", "Open log viewer")
-		systray.AddSeparator()
-		// 2. Settings: 點擊後直接打開 config.yaml 讓使用者編輯
-		mSettings := systray.AddMenuItem("Settings", "Open config.yaml")
-		// 3. About: 點擊後彈出 Windows 原生訊息視窗
-		mAbout := systray.AddMenuItem("About", "About GoIdleGuard")
-		// 4. Handle menu clicks in a goroutine / 在 goroutine 中處理選單點擊事件
-		systray.AddSeparator() // 分隔線
-		// 5. Add "Quit" menu item / 新增 "退出" 選單選項
-		mQuit := systray.AddMenuItem("Quit", "Quit GoIdleGuard")
-		// Handle menu clicks in a goroutine / 在 goroutine 中處理選單點擊事件
-		go func() {
-			for {
-				select {
-				case <-mShowLogs.ClickedCh:
-					// Open PowerShell to tail the log file
-					// 開啟 PowerShell 並執行 Get-Content -Wait (類似 Linux tail -f)
-					openLogViewer(logPath)
-				case <-mSettings.ClickedCh:
-					// User clicked Settings / 使用者點擊了設定
-					openFile(configPath)
-				case <-mAbout.ClickedCh:
-					// User clicked About / 使用者點擊了關於
-					showWindowsAlert("GoIdleGuard v1.0", "Created by Hanks\n\nRunning in background to keep system awake.")
-				case <-mQuit.ClickedCh:
-					systray.Quit()
-					return
-				}
-			}
-		}()
-
-		// Start the Daemon in a separate goroutine / 在獨立的 goroutine 中啟動 Daemon
-		// This prevents blocking the systray UI / 這樣可以避免卡住系統匣的介面
-		go func() {
-			logger.LogInfo("Starting Daemon...")
-			dc.StartDaemon()
-			// 捕捉系統中斷訊號以優雅關閉
-			sigCh := make(chan os.Signal, 1)
-			signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-			<-sigCh
-		}()
+		setupTrayItems(dc, logPath, configPath)
 	}
 
 	// Define onExit logic / 定義程式退出時的邏輯
@@ -116,4 +81,82 @@ func main() {
 	// Start system tray / 啟動系統匣
 	// This will block main thread / 這會卡住主執行緒直到 systray.Quit() 被呼叫
 	systray.Run(onReady, onExit)
+}
+
+// 輔助函式：為了讓 main 更乾淨，可以把 systray 設定放這裡
+func setupTrayItems(dc *Controller, logPath, configPath string) {
+	systray.SetIcon(iconData)
+	if runtime.GOOS != "darwin" {
+		systray.SetTitle("GoIdleGuard")
+	}
+	systray.SetTooltip("GoIdleGuard is running")
+
+	mShowLogs := systray.AddMenuItem("Show Logs (Live)", "Open log viewer")
+	systray.AddSeparator()
+	mSettings := systray.AddMenuItem("Settings", "Open config.yaml")
+	mAbout := systray.AddMenuItem("About", "About GoIdleGuard")
+	systray.AddSeparator()
+	mQuit := systray.AddMenuItem("Quit", "Quit GoIdleGuard")
+
+	go func() {
+		for {
+			select {
+			case <-mShowLogs.ClickedCh:
+				openLogViewer(logPath)
+			case <-mSettings.ClickedCh:
+				openFile(configPath)
+			case <-mAbout.ClickedCh:
+				showWindowsAlert("About", fmt.Sprintf("GoIdleGuard running.\nLog: %s", logPath))
+			case <-mQuit.ClickedCh:
+				systray.Quit()
+				return
+			}
+		}
+	}()
+
+	go func() {
+		logger.LogInfo("Starting Daemon...")
+		dc.StartDaemon()
+
+		sigCh := make(chan os.Signal, 1)
+		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+		<-sigCh
+
+		systray.Quit()
+	}()
+}
+
+// resolveAppRoot 尋找正確的應用程式目錄
+// 優先順序：
+// 1. 執行檔所在目錄 (適合正式部署，已有 config.yaml)
+// 2. 執行檔的上一層目錄 (適合開發模式，config.yaml 在專案根目錄)
+// 3. 當前工作目錄 (Fallback)
+func resolveAppRoot() string {
+	ex, err := os.Executable()
+	if err != nil {
+		return "."
+	}
+	exDir := filepath.Dir(ex)
+
+	// 檢查 1: config.yaml 是否在執行檔旁邊? (例如 bin/config.yaml)
+	if _, err := os.Stat(filepath.Join(exDir, "config.yaml")); err == nil {
+		return exDir
+	}
+
+	// 檢查 2: config.yaml 是否在上一層? (例如 GoIdleGuard/config.yaml)
+	// 這能解決你遇到的 "變成 ...\bin" 的問題
+	parentDir := filepath.Dir(exDir)
+	if _, err := os.Stat(filepath.Join(parentDir, "config.yaml")); err == nil {
+		return parentDir
+	}
+
+	// 檢查 3: config.yaml 是否在上一層? (例如 GoIdleGuard/cmd/daemon/config.yaml)
+	// 這能解決你遇到的 "變成 ...\bin" 的問題
+	parentDir2 := filepath.Dir(parentDir)
+	if _, err := os.Stat(filepath.Join(parentDir2, "config.yaml")); err == nil {
+		return parentDir2
+	}
+
+	// 預設回傳執行檔目錄 (即使沒找到，也只好用這裡)
+	return exDir
 }
