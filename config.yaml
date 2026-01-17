@@ -48,6 +48,6 @@ workSchedule:
   saturday: 
     - start: "08:00"
       end: "12:00"
-    - start: "13:00"
+    - start: "15:05"
       end: "18:00"
   sunday: []

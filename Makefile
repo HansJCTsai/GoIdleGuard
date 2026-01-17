@@ -126,6 +126,7 @@ APP_BUNDLE=bin/$(APP_NAME).app
 CONTENTS=$(APP_BUNDLE)/Contents
 MACOS_DIR=$(CONTENTS)/MacOS
 RESOURCES=$(CONTENTS)/Resources
+ICNS_PATH := cmd/daemon/icon.icns
 # --- macOS App Packaging ---
 macos-app: macos-daemon
 	@echo "Packaging $(APP_NAME).app for macOS..."
@@ -137,8 +138,16 @@ macos-app: macos-daemon
 	# 2. 複製執行檔與設定檔
 	@cp "bin/app-daemon-darwin" "$(MACOS_DIR)/$(APP_NAME)"
 	@cp "config.yaml" "$(MACOS_DIR)/"
+
+	# 3. 複製圖示檔案到 Resources 目錄
+	@if [ -f "$(ICNS_PATH)" ]; then \
+		cp "$(ICNS_PATH)" "$(RESOURCES)/icon.icns"; \
+		echo "   ✔ Icon copied."; \
+	else \
+		echo "   ⚠️ Warning: icon.icns not found in $(ICNS_PATH)"; \
+	fi
 	
-	# 3. 建立 Info.plist
+	# 4. 建立 Info.plist
 	@echo '<?xml version="1.0" encoding="UTF-8"?>' > "$(CONTENTS)/Info.plist"
 	@echo '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">' >> "$(CONTENTS)/Info.plist"
 	@echo '<plist version="1.0">' >> "$(CONTENTS)/Info.plist"
@@ -154,7 +163,7 @@ macos-app: macos-daemon
 	@echo '</dict>' >> "$(CONTENTS)/Info.plist"
 	@echo '</plist>' >> "$(CONTENTS)/Info.plist"
 	
-	# 4. (選用) 設定權限
+	# 5. (選用) 設定權限
 	@chmod +x "$(MACOS_DIR)/$(APP_NAME)"
 	
 	@echo "App Bundle created at: $(APP_BUNDLE)"

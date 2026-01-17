@@ -18,7 +18,8 @@ func parseSessionTime(tStr string, now time.Time) (time.Time, error) {
 
 // IsTimeInRange 判斷 target 是否介於 start 與 end 之間。
 func IsTimeInRange(target, start, end time.Time) bool {
-	return target.After(start) && target.Before(end)
+	// return target.After(start) && target.Before(end)
+	return (target.Equal(start) || target.After(start)) && target.Before(end)
 }
 
 func CheckWorkTime(cfg *config.APPConfig, now time.Time) bool {
